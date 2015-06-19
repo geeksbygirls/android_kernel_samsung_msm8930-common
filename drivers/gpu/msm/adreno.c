@@ -391,7 +391,7 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 {
 	struct adreno_perfcounters *counters = adreno_dev->gpudev->perfcounters;
 	struct adreno_perfcount_group *group;
-	unsigned int i;
+	unsigned int i, t;
 
 	*max_counters = 0;
 
@@ -411,11 +411,13 @@ int adreno_perfcounter_query_group(struct adreno_device *adreno_dev,
 	if (countables == NULL || count == 0)
 		return 0;
 
+	t = min_t(unsigned int, group->reg_count, count);
+
 	/*
 	 * Go through all available counters.  Write upto *count * countable
 	 * values.
 	 */
-	for (i = 0; i < group->reg_count && i < count; i++) {
+	for (i = 0; i < t; i++) {
 		if (copy_to_user(&countables[i], &(group->regs[i].countable),
 				sizeof(unsigned int)) != 0)
 			return -EFAULT;
