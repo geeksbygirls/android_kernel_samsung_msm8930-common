@@ -133,27 +133,27 @@ static void msm_ispif_sel_csid_core(struct ispif_device *ispif,
 	switch (intftype) {
 	case PIX0:
 		data &= ~(0x3);
-		data |= csid;
+		data |= (uint32_t) csid;
 		break;
 
 	case RDI0:
 		data &= ~(0x3 << 4);
-		data |= (csid << 4);
+		data |= ((uint32_t) csid) << 4;
 		break;
 
 	case PIX1:
 		data &= ~(0x3 << 8);
-		data |= (csid << 8);
+		data |= ((uint32_t) csid) << 8;
 		break;
 
 	case RDI1:
 		data &= ~(0x3 << 12);
-		data |= (csid << 12);
+		data |= ((uint32_t) csid) << 12;
 		break;
 
 	case RDI2:
 		data &= ~(0x3 << 20);
-		data |= (csid << 20);
+		data |= ((uint32_t) csid) << 20;
 		break;
 	}
 	if (data) {
@@ -171,7 +171,7 @@ static void msm_ispif_enable_intf_cids(struct ispif_device *ispif,
 	case PIX0:
 		data = msm_camera_io_r(ispif->base +
 			ISPIF_PIX_0_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
-		data |= cid_mask;
+		data |=  (uint32_t) cid_mask;
 		msm_camera_io_w(data, ispif->base +
 			ISPIF_PIX_0_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
 		break;
@@ -179,7 +179,7 @@ static void msm_ispif_enable_intf_cids(struct ispif_device *ispif,
 	case RDI0:
 		data = msm_camera_io_r(ispif->base +
 			ISPIF_RDI_0_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
-		data |= cid_mask;
+		data |=  (uint32_t) cid_mask;
 		msm_camera_io_w(data, ispif->base +
 			ISPIF_RDI_0_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
 		break;
@@ -187,7 +187,7 @@ static void msm_ispif_enable_intf_cids(struct ispif_device *ispif,
 	case PIX1:
 		data = msm_camera_io_r(ispif->base +
 			ISPIF_PIX_1_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
-		data |= cid_mask;
+		data |=  (uint32_t) cid_mask;
 		msm_camera_io_w(data, ispif->base +
 			ISPIF_PIX_1_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
 		break;
@@ -195,7 +195,7 @@ static void msm_ispif_enable_intf_cids(struct ispif_device *ispif,
 	case RDI1:
 		data = msm_camera_io_r(ispif->base +
 			ISPIF_RDI_1_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
-		data |= cid_mask;
+		data |=  (uint32_t) cid_mask;
 		msm_camera_io_w(data, ispif->base +
 			ISPIF_RDI_1_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
 		break;
@@ -203,7 +203,7 @@ static void msm_ispif_enable_intf_cids(struct ispif_device *ispif,
 	case RDI2:
 		data = msm_camera_io_r(ispif->base +
 			ISPIF_RDI_2_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
-		data |= cid_mask;
+		data |=  (uint32_t) cid_mask;
 		msm_camera_io_w(data, ispif->base +
 			ISPIF_RDI_2_INTF_CID_MASK_ADDR + (0x200 * vfe_intf));
 		break;
