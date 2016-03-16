@@ -46,6 +46,11 @@ config USE_VFB
 	---help---
 	  Support for MSM Virtual Framebuffer
 
+config MDP_DEBUG_FS
+	depends on DEBUG_FS
+	bool "MDP Debug FS"
+	default n
+
 choice
 	prompt "MDP HW version"
 	default FB_MSM_MDP22
