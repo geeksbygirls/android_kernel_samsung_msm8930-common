@@ -47,52 +47,132 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 {
 	uint32_t *payload;
 	int i, index;
+
+	if (data == NULL) {
+		pr_err("%s: data paramter is null\n", __func__);
+		return -EINVAL;
+	}
+
 	payload = data->payload;
 
 	if (data->opcode == RESET_EVENTS) {
-		pr_debug("adm_callback: Reset event is received: %d %d apr[%p]\n",
+		pr_debug("%s: Reset event is received: %d %d apr[%p]\n",
+				__func__,
 				data->reset_event, data->reset_proc,
 				this_adm.apr);
 		if (this_adm.apr) {
 			apr_reset(this_adm.apr);
-			for (i = 0; i < Q6_AFE_MAX_PORTS; i++) {
+			for (i = 0; i < AFE_MAX_PORTS; i++) {
 				atomic_set(&this_adm.copp_id[i],
 							RESET_COPP_ID);
+				atomic_set(&this_adm.copp_low_latency_id[i],
+							RESET_COPP_ID);
 				atomic_set(&this_adm.copp_cnt[i], 0);
+				atomic_set(&this_adm.copp_low_latency_cnt[i],
+						0);
+				atomic_set(&this_adm.copp_perf_mode[i], 0);
 				atomic_set(&this_adm.copp_stat[i], 0);
 			}
 			this_adm.apr = NULL;
+			reset_custom_topology_flags();
+			this_adm.set_custom_topology = 1;
+			for (i = 0; i < ADM_MAX_CAL_TYPES; i++)
+				atomic_set(&this_adm.mem_map_cal_handles[i],
+					0);
+			rtac_clear_mapping(ADM_RTAC_CAL);
+		}
+		pr_debug("%s: Resetting calibration blocks\n", __func__);
+		for (i = 0; i < MAX_AUDPROC_TYPES; i++) {
+			/* Device calibration */
+			this_adm.mem_addr_audproc[i].cal_size = 0;
+			this_adm.mem_addr_audproc[i].cal_kvaddr = 0;
+			this_adm.mem_addr_audproc[i].cal_paddr = 0;
+
+			/* Volume calibration */
+			this_adm.mem_addr_audvol[i].cal_size = 0;
+			this_adm.mem_addr_audvol[i].cal_kvaddr = 0;
+			this_adm.mem_addr_audvol[i].cal_paddr = 0;
 		}
 		return 0;
 	}
 
-	pr_debug("%s: code = 0x%x PL#0[%x], PL#1[%x], size = %d\n", __func__,
-			data->opcode, payload[0], payload[1],
-					data->payload_size);
-
+	adm_callback_debug_print(data);
 	if (data->payload_size) {
 		index = q6audio_get_port_index(data->token);
-		if (index < 0 || index >= Q6_AFE_MAX_PORTS) {
+		if (index < 0 || index >= AFE_MAX_PORTS) {
 			pr_err("%s: invalid port idx %d token %d\n",
 					__func__, index, data->token);
 			return 0;
 		}
 		if (data->opcode == APR_BASIC_RSP_RESULT) {
-			pr_debug("APR_BASIC_RSP_RESULT id %x\n", payload[0]);
+			pr_debug("%s: APR_BASIC_RSP_RESULT id 0x%x\n",
+				__func__, payload[0]);
+			if (payload[1] != 0) {
+				pr_err("%s: cmd = 0x%x returned error = 0x%x\n",
+					__func__, payload[0], payload[1]);
+			}
 			switch (payload[0]) {
 			case ADM_CMD_SET_PP_PARAMS_V5:
+				pr_debug("%s: ADM_CMD_SET_PP_PARAMS_V5\n",
+					__func__);
 				if (rtac_make_adm_callback(
-					payload, data->payload_size))
-					pr_debug("%s: payload[0]: 0x%x\n",
-						__func__, payload[0]);
+					payload, data->payload_size)) {
 					break;
+				}
+				/*
+				 * if soft volume is called and already
+				 * interrupted break out of the sequence here
+				 */
 			case ADM_CMD_DEVICE_CLOSE_V5:
 			case ADM_CMD_SHARED_MEM_UNMAP_REGIONS:
-			case ADM_CMD_SHARED_MEM_MAP_REGIONS:
 			case ADM_CMD_MATRIX_MAP_ROUTINGS_V5:
-				pr_debug("ADM_CMD_MATRIX_MAP_ROUTINGS\n");
+			case ADM_CMD_STREAM_DEVICE_MAP_ROUTINGS_V5:
+			case ADM_CMD_ADD_TOPOLOGIES:
+				pr_debug("%s: Basic callback received, wake up.\n",
+					__func__);
 				atomic_set(&this_adm.copp_stat[index], 1);
 				wake_up(&this_adm.wait[index]);
+				break;
+			case ADM_CMD_SHARED_MEM_MAP_REGIONS:
+				pr_debug("%s: ADM_CMD_SHARED_MEM_MAP_REGIONS\n",
+					__func__);
+				/* Should only come here if there is an APR */
+				/* error or malformed APR packet. Otherwise */
+				/* response will be returned as */
+				if (payload[1] != 0) {
+					pr_err("%s: ADM map error, resuming\n",
+						__func__);
+					atomic_set(&this_adm.copp_stat[index],
+							1);
+					wake_up(&this_adm.wait[index]);
+				}
+				break;
+			case ADM_CMD_GET_PP_PARAMS_V5:
+				pr_debug("%s: ADM_CMD_GET_PP_PARAMS_V5\n",
+					__func__);
+				/* Should only come here if there is an APR */
+				/* error or malformed APR packet. Otherwise */
+				/* response will be returned as */
+				/* ADM_CMDRSP_GET_PP_PARAMS_V5 */
+				if (payload[1] != 0) {
+					pr_err("%s: ADM get param error = %d, resuming\n",
+						__func__, payload[1]);
+					rtac_make_adm_callback(payload,
+						data->payload_size);
+				}
+				break;
+			case ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V5:
+				pr_debug("%s: ADM_CMD_SET_PSPD_MTMX_STRTR_PARAMS_V5\n",
+					__func__);
+				atomic_set(&this_adm.copp_stat[index], 1);
+				wake_up(&this_adm.wait[index]);
+				break;
+			case ADM_CMD_GET_PP_TOPO_MODULE_LIST:
+				pr_debug("%s:ADM_CMD_GET_PP_TOPO_MODULE_LIST\n",
+					 __func__);
+				if (payload[1] != 0)
+					pr_err("%s: ADM get topo list error = %d,\n",
+						__func__, payload[1]);
 				break;
 			default:
 				pr_err("%s: Unknown Cmd: 0x%x\n", __func__,
@@ -106,6 +186,7 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 		case ADM_CMDRSP_DEVICE_OPEN_V5: {
 			struct adm_cmd_rsp_device_open_v5 *open =
 			(struct adm_cmd_rsp_device_open_v5 *)data->payload;
+
 			if (open->copp_id == INVALID_COPP_ID) {
 				pr_err("%s: invalid coppid rxed %d\n",
 					__func__, open->copp_id);
@@ -113,17 +194,81 @@ static int32_t adm_callback(struct apr_client_data *data, void *priv)
 				wake_up(&this_adm.wait[index]);
 				break;
 			}
-			atomic_set(&this_adm.copp_id[index], open->copp_id);
+			if (atomic_read(&this_adm.copp_perf_mode[index])) {
+				atomic_set(&this_adm.copp_low_latency_id[index],
+						open->copp_id);
+			} else {
+				atomic_set(&this_adm.copp_id[index],
+					open->copp_id);
+			}
 			atomic_set(&this_adm.copp_stat[index], 1);
 			pr_debug("%s: coppid rxed=%d\n", __func__,
 							open->copp_id);
 			wake_up(&this_adm.wait[index]);
 			}
 			break;
-		case ADM_CMD_GET_PP_PARAMS_V5:
-			pr_debug("%s: ADM_CMD_GET_PP_PARAMS_V5\n", __func__);
-			rtac_make_adm_callback(payload,
-				data->payload_size);
+		case ADM_CMDRSP_GET_PP_PARAMS_V5:
+			pr_debug("%s: ADM_CMDRSP_GET_PP_PARAMS_V5\n", __func__);
+			if (payload[0] != 0)
+				pr_err("%s: ADM_CMDRSP_GET_PP_PARAMS_V5 returned error = 0x%x\n",
+					__func__, payload[0]);
+			if (rtac_make_adm_callback(payload,
+					data->payload_size))
+				break;
+			if ((payload[0] == 0) &&
+			    (data->payload_size > (4 * sizeof(*payload))) &&
+			    (data->payload_size/sizeof(*payload)-4 >= payload[3]) &&
+			    (ARRAY_SIZE(adm_get_parameters) > 0) &&
+			    (ARRAY_SIZE(adm_get_parameters)-1 >= payload[3])) {
+			                adm_get_parameters[0] = payload[3];
+					pr_debug("GET_PP PARAM:received parameter length: 0x%x\n",
+						adm_get_parameters[0]);
+					/* storing param size then params */
+					for (i = 0; i < payload[3]; i++)
+						adm_get_parameters[1+i] =
+								payload[4+i];
+			} else {
+				adm_get_parameters[0] = -1;
+				pr_err("%s: GET_PP_PARAMS failed, setting size to %d\n",
+					__func__, adm_get_parameters[0]);
+			}
+			atomic_set(&this_adm.copp_stat[index], 1);
+			wake_up(&this_adm.wait[index]);
+			break;
+		case ADM_CMDRSP_GET_PP_TOPO_MODULE_LIST:
+			pr_debug("%s: ADM_CMDRSP_GET_PP_TOPO_MODULE_LIST\n",
+				 __func__);
+			if (payload[0] != 0) {
+				pr_err("%s: ADM_CMDRSP_GET_PP_TOPO_MODULE_LIST",
+					 __func__);
+				pr_err(":err = 0x%x\n", payload[0]);
+			} else if (payload[1] >
+				   ((ADM_GET_TOPO_MODULE_LIST_LENGTH /
+				   sizeof(uint32_t)) - 1)) {
+				pr_err("%s: ADM_CMDRSP_GET_PP_TOPO_MODULE_LIST",
+					 __func__);
+				pr_err(":size = %d\n", payload[1]);
+			} else {
+				pr_debug("%s:Num modules payload[1] %d\n",
+					 __func__, payload[1]);
+				adm_module_topo_list[0] = payload[1];
+				for (i = 1; i <= payload[1]; i++) {
+					adm_module_topo_list[i] = payload[1+i];
+					pr_debug("%s:payload[%d] = %x\n",
+						 __func__, (i+1), payload[1+i]);
+				}
+			}
+			atomic_set(&this_adm.copp_stat[index], 1);
+			wake_up(&this_adm.wait[index]);
+			break;
+		case ADM_CMDRSP_SHARED_MEM_MAP_REGIONS:
+			pr_debug("%s: ADM_CMDRSP_SHARED_MEM_MAP_REGIONS\n",
+				__func__);
+			atomic_set(&this_adm.mem_map_cal_handles[
+				atomic_read(&this_adm.mem_map_cal_index)],
+				*payload);
+			atomic_set(&this_adm.copp_stat[index], 1);
+			wake_up(&this_adm.wait[index]);
 			break;
 		default:
 			pr_err("%s: Unknown cmd:0x%x\n", __func__,
