@@ -307,6 +307,7 @@ struct msm_mctl_post_proc_cmd {
 #define MAX_ACTUATOR_INIT_SET 12
 #define MAX_ACTUATOR_TYPE_SIZE 32
 #define MAX_ACTUATOR_REG_TBL_SIZE 8
+#define MAX_ACTUATOR_AF_TOTAL_STEPS 1024
 
 
 #define MSM_MAX_CAMERA_CONFIGS 2
@@ -1045,6 +1046,9 @@ struct msm_snapshot_pp_status {
 
 #define MOVE_NEAR	0
 #define MOVE_FAR	1
+
+#define MSM_ACTUATOR_MOVE_SIGNED_FAR -1
+#define MSM_ACTUATOR_MOVE_SIGNED_NEAR  1
 
 #define CAMERA_MODE_INIT		0
 #define CAMERA_MODE_PREVIEW		1
