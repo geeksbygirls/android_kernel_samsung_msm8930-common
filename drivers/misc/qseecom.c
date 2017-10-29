@@ -1157,7 +1157,32 @@ static int __qseecom_send_cmd(struct qseecom_dev_handle *data,
 	bool found_app = false;
 	int name_len = 0;
 
+	if (req->cmd_req_buf == NULL || req->resp_buf == NULL) {
+		pr_err("cmd buffer or response buffer is null\n");
+		return -EINVAL;
+	}
+
+	if (req->cmd_req_len <= 0 ||
+		req->resp_len <= 0 ||
+		req->cmd_req_len > data->client.sb_length ||
+		req->resp_len > data->client.sb_length) {
+		pr_err("cmd buffer length or "
+				"response buffer length not valid\n");
+		return -EINVAL;
+	}
+
+	if (req->cmd_req_len > UINT_MAX - req->resp_len) {
+		pr_err("Integer overflow detected in req_len & rsp_len, exiting now\n");
+		return -EINVAL;
+	}
+
 	reqd_len_sb_in = req->cmd_req_len + req->resp_len;
+	if (reqd_len_sb_in > data->client.sb_length) {
+		pr_debug("Not enough memory to fit cmd_buf and "
+			"resp_buf. Required: %u, Available: %u\n",
+				reqd_len_sb_in, data->client.sb_length);
+		return -ENOMEM;
+	}
 
 	/* find app_id & img_name from list */
 	spin_lock_irqsave(&qseecom.registered_app_list_lock, flags);
