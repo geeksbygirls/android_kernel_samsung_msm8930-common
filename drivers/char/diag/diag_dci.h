@@ -46,7 +46,7 @@ struct dci_pkt_req_tracking_tbl {
 };
 
 struct diag_dci_client_tbl {
-	int client_id;
+	uint32_t client_id;
 	struct task_struct *client;
 	uint16_t list; /* bit mask */
 	int signal_type;
