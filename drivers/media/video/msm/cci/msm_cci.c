@@ -114,7 +114,7 @@ static int32_t msm_cci_data_queue(struct cci_device *cci_dev,
 {
 	uint16_t i = 0, j = 0, k = 0, h = 0, len = 0;
 	uint32_t cmd = 0;
-	uint8_t data[10];
+	uint8_t data[11];
 	uint16_t reg_addr = 0;
 	struct msm_camera_cci_i2c_write_cfg *i2c_msg =
 		&c_ctrl->cfg.cci_i2c_write_cfg;
@@ -440,14 +440,25 @@ static int32_t msm_cci_i2c_write(struct v4l2_subdev *sd,
 
 	val = 1 << ((master * 2) + queue);
 	CDBG("%s:%d CCI_QUEUE_START_ADDR\n", __func__, __LINE__);
-	msm_camera_io_w(val, cci_dev->base + CCI_QUEUE_START_ADDR +
-		master*0x200 + queue * 0x100);
+	msm_camera_io_w(val, cci_dev->base + CCI_QUEUE_START_ADDR);
 
-	CDBG("%s line %d wait_for_completion_interruptible\n",
+
+	CDBG("%s:%d E wait_for_completion_interruptible\n",
 		__func__, __LINE__);
-	wait_for_completion_interruptible_timeout(&cci_dev->
+	rc = wait_for_completion_interruptible_timeout(&cci_dev->
 		cci_master_info[master].reset_complete, CCI_TIMEOUT);
-
+	if (rc <= 0) {
+		pr_err("%s: wait_for_completion_interruptible_timeout %d\n",
+			 __func__, __LINE__);
+		if (rc == 0)
+			rc = -ETIMEDOUT;
+		msm_cci_flush_queue(cci_dev, master);
+		goto ERROR;
+	} else {
+		rc = cci_dev->cci_master_info[master].status;
+	}
+	CDBG("%s:%d X wait_for_completion_interruptible\n", __func__,
+		__LINE__);
 ERROR:
 	mutex_unlock(&cci_dev->cci_master_info[master].mutex);
 	return rc;
