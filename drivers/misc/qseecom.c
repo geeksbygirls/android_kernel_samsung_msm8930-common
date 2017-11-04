@@ -297,7 +297,7 @@ static int __qseecom_set_sb_memory(struct qseecom_registered_listener_list *svc,
 	/* Get the handle of the shared fd */
 	svc->ihandle = ion_import_dma_buf(qseecom.ion_clnt,
 					listener->ifd_data_fd);
-	if (IS_ERR_OR_NULL(svc->ihandle)) {
+	if (svc->ihandle == NULL) {
 		pr_err("Ion client could not retrieve the handle\n");
 		return -ENOMEM;
 	}
@@ -309,63 +309,24 @@ static int __qseecom_set_sb_memory(struct qseecom_registered_listener_list *svc,
 	svc->sb_virt = (char *) ion_map_kernel(qseecom.ion_clnt, svc->ihandle);
 	svc->sb_phys = pa;
 
-	if (qseecom.qseos_version == QSEOS_VERSION_14) {
-		req.qsee_cmd_id = QSEOS_REGISTER_LISTENER;
-		req.listener_id = svc->svc.listener_id;
-		req.sb_len = svc->sb_length;
-		req.sb_ptr = (void *)svc->sb_phys;
+	req.qsee_cmd_id = QSEOS_REGISTER_LISTENER;
+	req.listener_id = svc->svc.listener_id;
+	req.sb_len = svc->sb_length;
+	req.sb_ptr = (void *)svc->sb_phys;
 
-		resp.result = QSEOS_RESULT_INCOMPLETE;
+	resp.result = QSEOS_RESULT_INCOMPLETE;
 
-		ret = scm_call(SCM_SVC_TZSCHEDULER, 1,  &req,
+	ret = scm_call(SCM_SVC_TZSCHEDULER, 1,  &req,
 					sizeof(req), &resp, sizeof(resp));
-		if (ret) {
-			pr_err("qseecom_scm_call failed with err: %d\n", ret);
-			return -EINVAL;
-		}
+	if (ret) {
+		pr_err("qseecom_scm_call failed with err: %d\n", ret);
+		return -EINVAL;
+	}
 
-		if (resp.result != QSEOS_RESULT_SUCCESS) {
-			pr_err("Error SB registration req: resp.result = %d\n",
-					resp.result);
-			return -EPERM;
-		}
-	} else {
-		struct qseecom_command cmd;
-		struct qseecom_response resp;
-		struct qse_pr_init_sb_req_s sb_init_req;
-		struct qse_pr_init_sb_rsp_s sb_init_rsp;
-
-		svc->sb_reg_req = kzalloc((sizeof(sb_init_req) +
-					sizeof(sb_init_rsp)), GFP_KERNEL);
-
-		sb_init_req.pr_cmd = TZ_SCHED_CMD_ID_REGISTER_LISTENER;
-		sb_init_req.listener_id = svc->svc.listener_id;
-		sb_init_req.sb_len = svc->sb_length;
-		sb_init_req.sb_ptr = svc->sb_phys;
-
-		memcpy(svc->sb_reg_req, &sb_init_req, sizeof(sb_init_req));
-
-		/* It will always be a new cmd from this method */
-		cmd.cmd_type = TZ_SCHED_CMD_NEW;
-		cmd.sb_in_cmd_addr = (u8 *)(virt_to_phys(svc->sb_reg_req));
-		cmd.sb_in_cmd_len = sizeof(sb_init_req);
-
-		resp.cmd_status = TZ_SCHED_STATUS_INCOMPLETE;
-
-		ret = scm_call(SCM_SVC_TZSCHEDULER, 1, &cmd, sizeof(cmd)
-				, &resp, sizeof(resp));
-
-		if (ret) {
-			pr_err("qseecom_scm_call failed with err: %d\n", ret);
-			return -EINVAL;
-		}
-
-		if (resp.cmd_status != TZ_SCHED_STATUS_COMPLETE) {
-			pr_err("SB registration fail resp.cmd_status %d\n",
-							resp.cmd_status);
-			return -EINVAL;
-		}
-		memset(svc->sb_virt, 0, svc->sb_length);
+	if (resp.result != QSEOS_RESULT_SUCCESS) {
+		pr_err("Error SB registration req: resp.result = %d\n",
+			resp.result);
+		return -EPERM;
 	}
 	return 0;
 }
@@ -431,54 +392,24 @@ static int qseecom_unregister_listener(struct qseecom_dev_handle *data)
 	struct qseecom_command_scm_resp resp;
 	struct ion_handle *ihandle = NULL;		/* Retrieve phy addr */
 
-	if (qseecom.qseos_version == QSEOS_VERSION_14) {
-		req.qsee_cmd_id = QSEOS_DEREGISTER_LISTENER;
-		req.listener_id = data->listener.id;
-		resp.result = QSEOS_RESULT_INCOMPLETE;
+	req.qsee_cmd_id = QSEOS_DEREGISTER_LISTENER;
+	req.listener_id = data->listener.id;
+	resp.result = QSEOS_RESULT_INCOMPLETE;
 
-		ret = scm_call(SCM_SVC_TZSCHEDULER, 1,  &req,
+	ret = scm_call(SCM_SVC_TZSCHEDULER, 1,  &req,
 					sizeof(req), &resp, sizeof(resp));
-		if (ret) {
-			pr_err("qseecom_scm_call failed with err: %d\n", ret);
-			return ret;
-		}
-
-		if (resp.result != QSEOS_RESULT_SUCCESS) {
-			pr_err("SB deregistartion: result=%d\n", resp.result);
-			return -EPERM;
-		}
-	} else {
-		struct qse_pr_init_sb_req_s sb_init_req;
-		struct qseecom_command cmd;
-		struct qseecom_response resp;
-		struct qseecom_registered_listener_list *svc;
-
-		svc = __qseecom_find_svc(data->listener.id);
-		sb_init_req.pr_cmd = TZ_SCHED_CMD_ID_REGISTER_LISTENER;
-		sb_init_req.listener_id = data->listener.id;
-		sb_init_req.sb_len = 0;
-		sb_init_req.sb_ptr = 0;
-
-		memcpy(svc->sb_reg_req, &sb_init_req, sizeof(sb_init_req));
-
-		/* It will always be a new cmd from this method */
-		cmd.cmd_type = TZ_SCHED_CMD_NEW;
-		cmd.sb_in_cmd_addr = (u8 *)(virt_to_phys(svc->sb_reg_req));
-		cmd.sb_in_cmd_len = sizeof(sb_init_req);
-		resp.cmd_status = TZ_SCHED_STATUS_INCOMPLETE;
-
-		ret = scm_call(SCM_SVC_TZSCHEDULER, 1, &cmd, sizeof(cmd),
-					&resp, sizeof(resp));
-		if (ret) {
-			pr_err("qseecom_scm_call failed with err: %d\n", ret);
-			return ret;
-		}
-		kzfree(svc->sb_reg_req);
-		if (resp.cmd_status != TZ_SCHED_STATUS_COMPLETE) {
-			pr_err("Error with SB initialization\n");
-			return -EPERM;
-		}
+	if (ret) {
+		pr_err("scm_call() failed with err: %d (lstnr id=%d)\n",
+				ret, data->listener.id);
+		return ret;
 	}
+
+	if (resp.result != QSEOS_RESULT_SUCCESS) {
+		pr_err("Failed resp.result=%d,(lstnr id=%d)\n",
+				resp.result, data->listener.id);
+		return -EPERM;
+	}
+
 	data->abort = 1;
 	spin_lock_irqsave(&qseecom.registered_listener_list_lock, flags);
 	list_for_each_entry(ptr_svc, &qseecom.registered_listener_list_head,
