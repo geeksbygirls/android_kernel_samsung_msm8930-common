@@ -4192,9 +4192,9 @@ static int iw_setchar_getnone(struct net_device *dev, struct iw_request_info *in
 
     if (!capable(CAP_NET_ADMIN))
     {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-		FL("permission check failed"));
-      return -EPERM;
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("permission check failed"));
+        return -EPERM;
     }
 
     if ((WLAN_HDD_GET_CTX(pAdapter))->isLogpInProgress)
@@ -4260,7 +4260,7 @@ static int iw_setchar_getnone(struct net_device *dev, struct iw_request_info *in
 #endif
        case WE_SET_AP_WPS_IE:
           hddLog( LOGE, "Received WE_SET_AP_WPS_IE" );
-          sme_updateP2pIe( WLAN_HDD_GET_HAL_CTX(pAdapter), pBuffer, wrqu->data.length );
+          sme_updateP2pIe( WLAN_HDD_GET_HAL_CTX(pAdapter), wrqu->data.pointer, wrqu->data.length );
           break;
        case WE_SET_CONFIG:
           vstatus = hdd_execute_config_command(pHddCtx, pBuffer);
@@ -4392,9 +4392,9 @@ int iw_set_three_ints_getnone(struct net_device *dev, struct iw_request_info *in
 
     if (!capable(CAP_NET_ADMIN))
     {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-		FL("permission check failed"));
-      return -EPERM;
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("permission check failed"));
+        return -EPERM;
     }
 
     if ((WLAN_HDD_GET_CTX(pAdapter))->isLogpInProgress)
@@ -4928,14 +4928,12 @@ int iw_set_var_ints_getnone(struct net_device *dev, struct iw_request_info *info
     {
         case WE_LOG_DUMP_CMD:
             {
-                vos_ssr_protect(__func__);
                 hddLog(LOG1, "%s: LOG_DUMP %d arg1 %d arg2 %d arg3 %d arg4 %d",
                         __func__, apps_args[0], apps_args[1], apps_args[2],
                         apps_args[3], apps_args[4]);
 
                 logPrintf(hHal, apps_args[0], apps_args[1], apps_args[2],
                         apps_args[3], apps_args[4]);
-                vos_ssr_unprotect(__func__);
 
             }
             break;
@@ -4958,26 +4956,6 @@ int iw_set_var_ints_getnone(struct net_device *dev, struct iw_request_info *info
                        apps_args[3], apps_args[4], apps_args[5], apps_args[6]);
 
                 hdd_setP2pPs(dev, &p2pNoA);
-
-            }
-            break;
-
-        case WE_MTRACE_SELECTIVE_MODULE_LOG_ENABLE_CMD:
-            {
-                hddLog(LOG1, "%s: SELECTIVE_MODULE_LOG %d arg1 %d arg2",
-                        __func__, apps_args[0], apps_args[1]);
-                vosTraceEnable(apps_args[0], apps_args[1]);
-            }
-            break;
-
-        case WE_MTRACE_DUMP_CMD:
-            {
-                hddLog(LOG1, "%s: MTRACE_DUMP code %d session %d count %d "
-                       "bitmask_of_module %d ",
-                        __func__, apps_args[0], apps_args[1], apps_args[2],
-                        apps_args[3]);
-                vosTraceDumpAll((void*)hHal , apps_args[0], apps_args[1],
-                                apps_args[2], apps_args[3]);
 
             }
             break;
@@ -6262,9 +6240,9 @@ static int iw_set_packet_filter_params(struct net_device *dev, struct iw_request
 
     if (!capable(CAP_NET_ADMIN))
     {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-		FL("permission check failed"));
-      return -EPERM;
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("permission check failed"));
+        return -EPERM;
     }
 
     /* ODD number is used for set, copy data using copy_from_user */
@@ -6965,12 +6943,12 @@ static int iw_set_band_config(struct net_device *dev,
 
     if (!capable(CAP_NET_ADMIN))
     {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-		FL("permission check failed"));
-      return -EPERM;
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("permission check failed"));
+        return -EPERM;
     }
 
-    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO, "%s: ", __func__);
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,"%s: ", __func__);
 
     if ((WLAN_HDD_GET_CTX(pAdapter))->isLogpInProgress)
     {
@@ -7003,31 +6981,32 @@ static int iw_set_power_params_priv(struct net_device *dev,
                            struct iw_request_info *info,
                            union iwreq_data *wrqu, char *extra)
 {
-  int ret;
-  char *ptr;
+    int ret;
+    char *ptr;
 
-  if (!capable(CAP_NET_ADMIN))
-  {
-    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-	      FL("permission check failed"));
-    return -EPERM;
-  }
+    if (!capable(CAP_NET_ADMIN))
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  FL("permission check failed"));
+        return -EPERM;
+    }
 
-  VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
-                "Set power params Private");
-  /* ODD number is used for set, copy data using copy_from_user */
-  ptr = mem_alloc_copy_from_user_helper(wrqu->data.pointer,
+    VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_INFO,
+              "Set power params Private");
+
+    /* ODD number is used for set, copy data using copy_from_user */
+    ptr = mem_alloc_copy_from_user_helper(wrqu->data.pointer,
                                           wrqu->data.length);
-  if (NULL == ptr)
-  {
-      VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
-                "mem_alloc_copy_from_user_helper fail");
-      return -ENOMEM;
-  }
+    if (NULL == ptr)
+    {
+        VOS_TRACE(VOS_MODULE_ID_HDD, VOS_TRACE_LEVEL_ERROR,
+                  "mem_alloc_copy_from_user_helper fail");
+        return -ENOMEM;
+    }
 
-  ret = iw_set_power_params(dev, info, wrqu, ptr, 0);
-  kfree(ptr);
-  return ret;
+    ret = iw_set_power_params(dev, info, wrqu, ptr, 0);
+    kfree(ptr);
+    return ret;
 }
 
 
